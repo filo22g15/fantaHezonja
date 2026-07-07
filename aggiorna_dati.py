@@ -92,11 +92,13 @@ data = {
     "players": players,
 }
 
-# conserva i rinnovi non confermati ("pnd") inseriti a mano in data.js
+# conserva i dati gestiti dal sito (rinnovi "pnd" dei giocatori e scelte al
+# draft delle squadre): il sito è la fonte di queste informazioni, quindi
+# vincono su quanto estratto ora dall'Excel.
 try:
-    import re as _re
     prev = open("data.js", encoding="utf-8").read()
-    prev = json.loads(_re.search(r"window\.LEAGUE = (\{.*\});", prev, _re.S).group(1))
+    prev = json.loads(re.search(r"window\.LEAGUE = (\{.*\});", prev, re.S).group(1))
+
     pnd_by_name = {p["n"]: p.get("pnd") for p in prev.get("players", []) if p.get("pnd")}
     kept = 0
     for p in players:
@@ -105,6 +107,17 @@ try:
             kept += 1
     if kept:
         print(f"Rinnovi da confermare conservati per {kept} giocatori.")
+
+    # le pick sono gestite dall'Admin del sito: se in data.js ci sono, tienile
+    picks_by_sheet = {t.get("sheet"): t.get("picks") for t in prev.get("teams", [])
+                      if t.get("picks")}
+    kept_p = 0
+    for t in teams:
+        if t.get("sheet") in picks_by_sheet:
+            t["picks"] = picks_by_sheet[t["sheet"]]
+            kept_p += 1
+    if kept_p:
+        print(f"Scelte al draft conservate dal sito per {kept_p} squadre.")
 except (FileNotFoundError, AttributeError, json.JSONDecodeError):
     pass
 

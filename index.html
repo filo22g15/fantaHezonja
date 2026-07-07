@@ -156,7 +156,15 @@
   .pickcol li{font-size:13.5px; padding:4px 0; border-bottom:1px solid rgba(42,56,73,.45); display:flex; gap:7px; align-items:baseline}
   .pickcol li:last-child{border-bottom:none}
   .pickcol .rd{font-family:'Barlow Condensed'; font-weight:700; font-size:13px; color:var(--ink); white-space:nowrap}
-  .pickcol .from{color:var(--muted); font-size:12.5px}
+  .pickcol .from{color:var(--muted); font-size:12.5px; flex:1}
+  .pickctl{display:inline-flex; gap:4px; align-items:center; margin-left:auto}
+  .pickctl select{background:var(--panel-2); border:1px solid var(--line); color:var(--ink); border-radius:5px; font:inherit; font-size:12px; padding:1px 4px; max-width:34px}
+  .pickctl select:hover{max-width:none}
+  .pickctl .pickdel{color:var(--muted); border:1px solid var(--line); border-radius:5px; font-size:12px; line-height:1; padding:2px 5px}
+  .pickctl .pickdel:hover{color:var(--loss); border-color:var(--loss)}
+  .addpick{margin-top:12px; font-family:'Barlow Condensed'; font-weight:700; font-size:13px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ball); border:1px dashed var(--ball); border-radius:8px; padding:7px 14px}
+  .addpick:hover{background:var(--ball-soft)}
 
   /* ---------- recap ---------- */
   .legend{display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); font-size:13px; margin:10px 2px 0}
@@ -432,15 +440,24 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     const foot = `<tfoot><tr><td colspan="2">Totale cap</td>${tot.map(v=>`<td class="num">${fmtM(v)}</td>`).join('')}</tr></tfoot>`;
 
     // ---- scelte al draft (raggruppate per anno) ----
-    const picks = (t.picks || []).slice().sort((a,b)=> a.y-b.y || a.rd-b.rd);
-    const anni = [...new Set(picks.map(p=>p.y))];
-    const picksHtml = picks.length ? `<div class="picks">${anni.map(y=>`
+    const pk = (t.picks || []).map((p,idx)=>({p, idx})).sort((a,b)=> a.p.y-b.p.y || a.p.rd-b.p.rd || (a.p.from<b.p.from?-1:1));
+    const anni = [...new Set(pk.map(x=>x.p.y))];
+    const altreSquadre = L.teams.filter(x=>x.name!==t.name)
+      .map(x=>`<option value="${esc(x.name)}">→ ${esc(x.name)}</option>`).join('');
+    const pickLi = ({p, idx}) => ADMIN.on
+      ? `<li><span class="rd">${p.rd}° giro</span><span class="from">${esc(p.from)}</span>
+          <span class="pickctl">
+            <select class="pickmove" data-idx="${idx}" title="Sposta a un'altra squadra"><option value="">↔</option>${altreSquadre}</select>
+            <button class="pickdel" type="button" data-idx="${idx}" title="Rimuovi scelta">✕</button>
+          </span></li>`
+      : `<li><span class="rd">${p.rd}° giro</span><span class="from">${esc(p.from)}</span></li>`;
+    const picksBody = pk.length ? `<div class="picks">${anni.map(y=>`
       <div class="pickcol">
         <div class="yr">${y}</div>
-        <ul>${picks.filter(p=>p.y===y).map(p=>
-          `<li><span class="rd">${p.rd}° giro</span><span class="from">${esc(p.from)}</span></li>`).join('')}</ul>
+        <ul>${pk.filter(x=>x.p.y===y).map(pickLi).join('')}</ul>
       </div>`).join('')}</div>`
       : `<p class="note">Nessuna scelta futura registrata per questa squadra.</p>`;
+    const picksHtml = picksBody + (ADMIN.on ? `<button class="addpick" type="button">+ Aggiungi scelta</button>` : '');
 
     // ---- riepilogo cap: rimanente rispetto al totale ----
     const capFootHtml = `<div class="tablewrap"><table>
@@ -488,6 +505,32 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
       <div class="sec">Cap rimanente</div>
       ${capFootHtml}
     `;
+
+    if(ADMIN.on){
+      app.querySelectorAll('select.pickmove').forEach(sel => sel.addEventListener('change', ()=>{
+        const idx = +sel.dataset.idx, target = sel.value;
+        if(!target) return;
+        const [pick] = t.picks.splice(idx, 1);
+        const dest = L.teams.find(x => x.name === target);
+        if(dest){ (dest.picks = dest.picks || []).push(pick); }
+        recomputeDirty(); renderTeam(name);
+      }));
+      app.querySelectorAll('button.pickdel').forEach(btn => btn.addEventListener('click', ()=>{
+        t.picks.splice(+btn.dataset.idx, 1);
+        recomputeDirty(); renderTeam(name);
+      }));
+      const add = app.querySelector('button.addpick');
+      if(add) add.addEventListener('click', ()=>{
+        const y = parseInt(prompt('Anno della scelta (es. 2027):') || '', 10);
+        if(!y || y < 2000 || y > 2100) return;
+        const rd = parseInt(prompt('Giro (1, 2, 3…):') || '', 10);
+        if(!rd || rd < 1 || rd > 15) return;
+        const from = (prompt('Provenienza (squadra di origine della scelta):') || '').trim();
+        if(!from) return;
+        (t.picks = t.picks || []).push({ y, rd, from });
+        recomputeDirty(); renderTeam(name);
+      });
+    }
   }
 
   /* ---------- RECAP ---------- */
@@ -526,8 +569,12 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     repo: 'filo22g15/fantaNba',   // owner/repo su GitHub
     branch: 'main',               // ramo pubblicato da GitHub Pages
     tokenKey: 'fnba_gh_token',
-    on: false, token: null, dirty: false, changes: [], orig: [],
+    on: false, token: null, dirty: false, changes: [], orig: [], origPicks: {},
   };
+
+  const pickKey = p => `${p.rd}° giro ${p.from} ${p.y}`;
+  const snapPicks = () => { const m = {}; L.teams.forEach(t => { m[t.name] = JSON.parse(JSON.stringify(t.picks || [])); }); return m; };
+  const restorePicks = () => { L.teams.forEach(t => { t.picks = JSON.parse(JSON.stringify(ADMIN.origPicks[t.name] || [])); }); };
 
   const ghHeaders = t => ({ Authorization: 'Bearer ' + (t || ADMIN.token), Accept: 'application/vnd.github+json' });
   const apiUrl = path => `https://api.github.com/repos/${ADMIN.repo}/contents/${path}`;
@@ -536,6 +583,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
 
   function adminInit(){
     ADMIN.orig = L.players.map(p => p.t || '');
+    ADMIN.origPicks = snapPicks();
     ADMIN.token = localStorage.getItem(ADMIN.tokenKey);
     ADMIN.on = !!ADMIN.token;
 
@@ -582,6 +630,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     localStorage.removeItem(ADMIN.tokenKey);
     ADMIN.token = null; ADMIN.on = false;
     L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; });   // scarta modifiche non pubblicate
+    restorePicks();
     ADMIN.changes = []; ADMIN.dirty = false;
     renderAdminBtn(); updatePublishBar(); route();
   }
@@ -593,12 +642,30 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
 
   function recomputeDirty(){
     ADMIN.changes = [];
+    // giocatori spostati
     L.players.forEach(p => {
       const o = ADMIN.orig[p.__i] || '', n = p.t || '';
       if(o !== n) ADMIN.changes.push(`${p.n}: ${o || 'svincolato'} → ${n || 'svincolato'}`);
     });
+    // scelte al draft aggiunte/rimosse (rispetto allo stato di partenza)
+    L.teams.forEach(t => {
+      const now = countBy((t.picks || []).map(pickKey));
+      const was = countBy((ADMIN.origPicks[t.name] || []).map(pickKey));
+      const chiavi = new Set([...now.keys(), ...was.keys()]);
+      chiavi.forEach(k => {
+        const d = (now.get(k) || 0) - (was.get(k) || 0);
+        for(let i = 0; i < d; i++)  ADMIN.changes.push(`${t.name}: + scelta ${k}`);
+        for(let i = 0; i < -d; i++) ADMIN.changes.push(`${t.name}: − scelta ${k}`);
+      });
+    });
     ADMIN.dirty = ADMIN.changes.length > 0;
     updatePublishBar();
+  }
+
+  function countBy(arr){
+    const m = new Map();
+    arr.forEach(k => m.set(k, (m.get(k) || 0) + 1));
+    return m;
   }
 
   function updatePublishBar(){
@@ -606,11 +673,12 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     if(!bar) return;
     bar.classList.toggle('show', ADMIN.on && ADMIN.dirty);
     const n = ADMIN.changes.length;
-    bar.querySelector('.msg').innerHTML = `<b>${n}</b> spostament${n===1?'o':'i'} da pubblicare`;
+    bar.querySelector('.msg').innerHTML = `<b>${n}</b> modific${n===1?'a':'he'} da pubblicare`;
   }
 
   function adminDiscard(){
     L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; });
+    restorePicks();
     recomputeDirty(); route();
   }
 
@@ -622,7 +690,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     try{
       const clean = JSON.stringify(L, (k,v) => k === '__i' ? undefined : v);
       const payload = 'window.LEAGUE = ' + clean + ';';
-      const msg = `Admin: ${ADMIN.changes.length} spostamento/i\n\n` + ADMIN.changes.join('\n');
+      const msg = `Admin: ${ADMIN.changes.length} modifica/e\n\n` + ADMIN.changes.join('\n');
 
       // 1) index.html: sostituisce solo il blocco dati, lasciando intatto il resto
       const meta = await ghGet('index.html');
@@ -637,6 +705,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
       await ghPut('data.js', payload, shaData, msg);
 
       ADMIN.orig = L.players.map(p => p.t || '');   // nuova base di partenza
+      ADMIN.origPicks = snapPicks();
       ADMIN.changes = []; ADMIN.dirty = false;
       updatePublishBar();
       alert('Pubblicato! GitHub Pages aggiorna il sito entro ~1 minuto.');
