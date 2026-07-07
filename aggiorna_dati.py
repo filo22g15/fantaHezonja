@@ -5,6 +5,7 @@ Uso:  python3 aggiorna_dati.py FantaNBA.xlsx
 Requisiti:  pip install openpyxl
 """
 import json
+import re
 import sys
 
 from openpyxl import load_workbook
@@ -13,8 +14,29 @@ XLSX = sys.argv[1] if len(sys.argv) > 1 else "FantaNBA.xlsx"
 SEASONS = ["2025/26", "2026/27", "2027/28", "2028/29", "2029/30"]
 CAP = 215_000_000
 NON_TEAM_SHEETS = {"Contratti", "Recap", "Bacheca", "Foglio10"}
+ANNO_MIN_PICK = 2026   # pick mostrate dal draft di quest'anno in poi
+RE_PICK = re.compile(r"scelta\s*(\d+)\s*°?\s*giro\s+(.+?)\s+((?:19|20)\d{2})", re.I)
 
 wb = load_workbook(XLSX, read_only=True, data_only=True)
+
+
+def estrai_pick(rows):
+    """Scelte al draft future (dedup, ordinate) dalle righe di un foglio squadra."""
+    trovate, viste = [], set()
+    for row in rows:
+        for v in row:
+            if not isinstance(v, str) or "scelta" not in v.lower():
+                continue
+            m = RE_PICK.search(" ".join(v.replace("�", "°").split()))
+            if not m:
+                continue
+            rd, origine, anno = int(m.group(1)), m.group(2).strip(), int(m.group(3))
+            if anno < ANNO_MIN_PICK or (rd, origine.upper(), anno) in viste:
+                continue
+            viste.add((rd, origine.upper(), anno))
+            trovate.append({"y": anno, "rd": rd, "from": origine})
+    trovate.sort(key=lambda p: (p["y"], p["rd"], p["from"]))
+    return trovate
 
 # ---- Foglio Contratti ----
 ws = wb["Contratti"]
@@ -40,7 +62,8 @@ for sn in wb.sheetnames:
     if sn in NON_TEAM_SHEETS:
         continue
     ws = wb[sn]
-    vals = list(ws.iter_rows(max_row=9, max_col=8, values_only=True))
+    allrows = list(ws.iter_rows(values_only=True))
+    vals = allrows[:9]
 
     def find(label):
         for row in vals:
@@ -58,6 +81,7 @@ for sn in wb.sheetnames:
         "franchise": find("UOMO FRANCHIGIA"),
         "nomina": find("ANNO NOMINA"),
         "scadenza": find("SCADENZA NOMINA"),
+        "picks": estrai_pick(allrows),
     })
 
 data = {
@@ -91,7 +115,6 @@ with open("data.js", "w", encoding="utf-8") as f:
     f.write(payload)
 
 # 2) aggiorna anche i dati incorporati in index.html, se presente
-import re
 try:
     html = open("index.html", encoding="utf-8").read()
     html, n = re.subn(r"window\.LEAGUE = \{.*?\};", payload, html, count=1, flags=re.S)
