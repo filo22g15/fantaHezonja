@@ -3,22 +3,24 @@
 
 Per ogni giocatore in data.js:
   1. legge il ruolo (G/GF/F/FC/C) dal profilo https://sports.ws/nba/<slug>
-  2. cerca il giocatore su Spotrac, apre il suo profilo e legge i cap hit
-     per stagione (2025-26 ... 2029-30)
+  2. SOLO per i free agent (senza squadra): cerca il giocatore su Spotrac,
+     apre il suo profilo e legge i cap hit per stagione (2025-26 ... 2029-30)
 
 Con i contratti lo script è prudente:
-  - gli anni in cui la lega NON ha un contratto (0) vengono riempiti come
-    "rinnovi da confermare" (campo pnd, in giallo sul sito, fuori dal cap)
-  - gli anni già ratificati dalla lega NON vengono toccati: se il valore
-    Spotrac è diverso, viene solo segnalato nel riepilogo finale
-  - con --sovrascrivi anche gli anni ratificati vengono aggiornati
+  - i giocatori SOTTO CONTRATTO in una squadra non vengono nemmeno cercati su
+    Spotrac: il contratto firmato in lega è la fonte e resta quello (così si
+    evita anche il blocco anti-bot su richieste inutili). I TAGLIATO, avendo
+    una squadra, sono a loro volta esclusi.
+  - per i free agent: gli anni vuoti (0) vengono proposti come "rinnovi da
+    confermare" (campo pnd, in giallo sul sito, fuori dal cap); gli anni già
+    valorizzati vengono aggiornati a Spotrac solo con --sovrascrivi
 
 Uso:
   python3 sincronizza.py                        # tutti (~15-20 minuti)
   python3 sincronizza.py "Evan Mobley" "Ja Morant"   # solo alcuni
   python3 sincronizza.py --solo-ruoli           # salta Spotrac
   python3 sincronizza.py --solo-contratti       # salta sports.ws
-  python3 sincronizza.py --sovrascrivi          # Spotrac vince sempre
+  python3 sincronizza.py --sovrascrivi          # Spotrac vince, ma solo per i free agent
 
 Requisiti: pip install requests
 """
@@ -191,7 +193,11 @@ def main() -> None:
                     non_trovati.append(f'{p["n"]} (sports.ws: /nba/{slug(p["n"])})')
                 time.sleep(PAUSA)
 
-            if fai_contratti and p.get("s") != "TAGLIATO":
+            # i contratti si cercano su Spotrac SOLO per i free agent (senza squadra):
+            # chi è sotto contratto in lega è bloccato, quindi interrogarlo sarebbe
+            # inutile e farebbe scattare il blocco anti-bot. I TAGLIATO hanno una
+            # squadra, quindi rientrano anch'essi nell'esclusione.
+            if fai_contratti and not p.get("t"):
                 caphits, url = caphit_spotrac(p["n"])
                 if caphits is None:
                     non_trovati.append(f'{p["n"]} (spotrac: {url or "profilo non trovato"})')
@@ -206,11 +212,13 @@ def main() -> None:
                                 pnd[idx] = reale
                                 rinnovi.append(f'{p["n"]} {stag}: {reale:,}'.replace(",", "."))
                         elif abs(p["sal"][idx] - reale) > 1000:
+                            # qui siamo gia' su un free agent (i giocatori sotto contratto non
+                            # vengono nemmeno interrogati): con --sovrascrivi allineiamo a Spotrac.
                             if sovrascrivi:
-                                differenze.append(f'{p["n"]} {stag}: {p["sal"][idx]:,.0f} -> {reale:,} (AGGIORNATO)'.replace(",", "."))
+                                differenze.append(f'{p["n"]} {stag}: {p["sal"][idx]:,.0f} -> {reale:,} (AGGIORNATO, free agent)'.replace(",", "."))
                                 p["sal"][idx] = float(reale)
                             else:
-                                differenze.append(f'{p["n"]} {stag}: lega {p["sal"][idx]:,.0f} vs Spotrac {reale:,}'.replace(",", "."))
+                                differenze.append(f'{p["n"]} {stag}: free agent, lega {p["sal"][idx]:,.0f} vs Spotrac {reale:,}'.replace(",", "."))
                     if any(pnd):
                         p["pnd"] = pnd
                 time.sleep(PAUSA)
@@ -241,10 +249,11 @@ def main() -> None:
     for x in ruoli_cambiati: print("  ", x)
     print(f"\nRinnovi aggiunti/aggiornati ({len(rinnovi)}):")
     for x in rinnovi: print("  ", x)
-    print(f"\nDifferenze sugli anni gia' ratificati ({len(differenze)}):")
+    print(f"\nDifferenze sugli stipendi dei free agent ({len(differenze)}):")
     for x in differenze: print("  ", x)
     if not sovrascrivi and differenze:
-        print("   (non toccati: rilancia con --sovrascrivi per allinearli a Spotrac)")
+        print("   (sono free agent: rilancia con --sovrascrivi per allinearli a Spotrac)")
+    print("   NB: i giocatori sotto contratto non vengono nemmeno cercati su Spotrac.")
     print(f"\nNon trovati ({len(non_trovati)}) — correggi in SLUG_MANUALI / SPOTRAC_MANUALI:")
     for x in non_trovati: print("  ", x)
     print("\nFatto. Ricarica index.html (o data.js) su GitHub per pubblicare.")

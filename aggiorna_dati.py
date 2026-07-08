@@ -111,6 +111,17 @@ try:
     if kept:
         print(f"Rinnovi da confermare conservati per {kept} giocatori.")
 
+    # le penali (dead money da taglio+rifirma) sono un concetto solo del sito, non
+    # presente nell'Excel: vanno conservate come i rinnovi.
+    dead_by_name = {p["n"]: p.get("dead") for p in prev.get("players", []) if p.get("dead")}
+    kept_d = 0
+    for p in players:
+        if p["n"] in dead_by_name:
+            p["dead"] = dead_by_name[p["n"]]
+            kept_d += 1
+    if kept_d:
+        print(f"Penali (dead money) conservate per {kept_d} giocatori.")
+
     # le pick sono gestite dall'Admin del sito: se in data.js ci sono, tienile
     picks_by_sheet = {t.get("sheet"): t.get("picks") for t in prev.get("teams", [])
                       if t.get("picks")}
