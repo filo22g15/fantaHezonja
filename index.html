@@ -165,6 +165,18 @@
   .addpick{margin-top:12px; font-family:'Barlow Condensed'; font-weight:700; font-size:13px; letter-spacing:.06em; text-transform:uppercase;
     color:var(--ball); border:1px dashed var(--ball); border-radius:8px; padding:7px 14px}
   .addpick:hover{background:var(--ball-soft)}
+  td.actcell{text-align:right; white-space:nowrap}
+  button.taglia, button.reintegra{font-family:'Barlow Condensed'; font-weight:700; font-size:12px; letter-spacing:.05em; text-transform:uppercase;
+    border-radius:6px; padding:3px 10px; border:1px solid var(--line)}
+  button.taglia{color:var(--loss); border-color:rgba(228,87,79,.5)}
+  button.taglia:hover{background:rgba(228,87,79,.14)}
+  button.reintegra{color:var(--win); border-color:rgba(87,199,133,.5)}
+  button.reintegra:hover{background:rgba(87,199,133,.14)}
+  input.saledit{width:100px; background:var(--panel-2); border:1px solid var(--ball); color:var(--ink); border-radius:5px;
+    font-family:'Barlow Condensed'; font-weight:600; font-size:14px; text-align:right; padding:3px 6px; font-variant-numeric:tabular-nums}
+  button.saltoggle{border:1px solid var(--line); border-radius:6px; color:var(--muted); font-size:13px; line-height:1; padding:3px 8px}
+  button.saltoggle:hover{color:var(--ball); border-color:var(--ball)}
+  button.saltoggle.on{color:var(--ball); border-color:var(--ball); background:var(--ball-soft)}
 
   /* ---------- recap ---------- */
   .legend{display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); font-size:13px; margin:10px 2px 0}
@@ -298,9 +310,12 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
   const capTotals = name => {
     const tot = [0,0,0,0,0], cut = [0,0,0,0,0], pnd = [0,0,0,0,0];
     for(const p of teamPlayers(name)){
+      const tagliato = p.s === 'TAGLIATO';
       for(let i=0;i<5;i++){
-        tot[i] += p.sal[i];
-        if(p.s === 'TAGLIATO') cut[i] += p.sal[i];
+        // i giocatori tagliati pesano sul cap per metà del contratto (dead money)
+        const hit = tagliato ? p.sal[i] / 2 : p.sal[i];
+        tot[i] += hit;
+        if(tagliato) cut[i] += hit;
         if(!p.sal[i] && p.pnd && p.pnd[i]) pnd[i] += p.pnd[i];
       }
     }
@@ -334,7 +349,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
   window.addEventListener('hashchange', route);
 
   /* ---------- CONTRATTI ---------- */
-  const cState = {q:'', team:'', role:'', st:'', sort:'n', dir:1};
+  const cState = {q:'', team:'', role:'', st:'', sort:'n', dir:1, edit:new Set()};
 
   function renderContracts(){
     const teams = [...new Set(L.players.map(p=>p.t).filter(Boolean))].sort();
@@ -387,10 +402,13 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     const arrow = key => cState.sort===key ? `<span class="dir">${cState.dir===1?'▾':'▴'}</span>` : '';
     const th = (key,label,num) => `<th class="${num?'num':''}"><button data-k="${key}">${label} ${arrow(key)}</button></th>`;
     document.getElementById('cnt').textContent = rows.length + ' giocatori';
+    const salCellEdit = (p,i) => cState.edit.has(p.__i)
+      ? `<td class="num"><input class="saledit" type="number" min="0" step="100000" data-idx="${p.__i}" data-s="${i}" value="${p.sal[i]||0}"></td>`
+      : `<td class="num">${salCell(p,i)}</td>`;
     document.getElementById('ctab').innerHTML = `
       <thead><tr>
         ${th('n','Giocatore')}${th('t','FantaTeam')}${th('r','Ruolo')}${th('s','Stato')}
-        ${S.map((s,i)=>th(String(i), s, true)).join('')}
+        ${S.map((s,i)=>th(String(i), s, true)).join('')}${ADMIN.on?'<th></th>':''}
       </tr></thead>
       <tbody>${rows.map(p=>`
         <tr>
@@ -398,7 +416,8 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
           <td class="dim">${ADMIN.on ? teamSelect(p) : (p.t?`<a href="#/squadra/${slug(p.t)}">${esc(p.t)}</a>`:'<span class="st fa">FREE AGENT</span>')}</td>
           <td><span class="role">${esc(p.r||'—')}</span></td>
           <td><span class="st ${stClass(statusOf(p))}">${esc(p.t?(p.s||''):'')}</span></td>
-          ${p.sal.map((v,i)=>`<td class="num">${salCell(p,i)}</td>`).join('')}
+          ${p.sal.map((v,i)=>ADMIN.on ? salCellEdit(p,i) : `<td class="num">${salCell(p,i)}</td>`).join('')}
+          ${ADMIN.on?`<td class="actcell"><button class="saltoggle${cState.edit.has(p.__i)?' on':''}" type="button" data-idx="${p.__i}" title="Modifica stipendio">${cState.edit.has(p.__i)?'✓':'✎'}</button></td>`:''}
         </tr>`).join('')}
       </tbody>`;
     document.querySelectorAll('#ctab thead button').forEach(b=>{
@@ -413,6 +432,20 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
         const p = L.players[+sel.dataset.idx];
         movePlayer(p, sel.value);
         drawContracts();
+      });
+    });
+    document.querySelectorAll('#ctab button.saltoggle').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const idx = +b.dataset.idx;
+        if(cState.edit.has(idx)) cState.edit.delete(idx); else cState.edit.add(idx);
+        drawContracts();
+      });
+    });
+    document.querySelectorAll('#ctab input.saledit').forEach(inp=>{
+      inp.addEventListener('change', ()=>{
+        const p = L.players[+inp.dataset.idx];
+        p.sal[+inp.dataset.s] = parseFloat(inp.value) || 0;
+        recomputeDirty();
       });
     });
   }
@@ -461,12 +494,15 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
         <td class="pname">${esc(p.n)} ${spotrac(p.n)}</td>
         <td><span class="role">${esc(p.r||'—')}</span></td>
         ${p.sal.map((v,i)=>`<td class="num">${salCell(p,i)}</td>`).join('')}
+        ${ADMIN.on ? `<td class="actcell">${p.s==='TAGLIATO'
+          ? `<button class="reintegra" type="button" data-idx="${p.__i}" title="Riporta nel roster attivo">Reintegra</button>`
+          : `<button class="taglia" type="button" data-idx="${p.__i}" title="Taglia (metà cap)">Taglia</button>`}</td>` : ''}
       </tr>`).join('');
 
     const table = (list, foot) => `
       <div class="tablewrap"><table>
-        <thead><tr><th>Giocatore</th><th>Ruolo</th>${S.map(s=>`<th class="num">${s}</th>`).join('')}</tr></thead>
-        <tbody>${rowsHtml(list) || `<tr><td colspan="7" class="dim">Nessun giocatore</td></tr>`}</tbody>
+        <thead><tr><th>Giocatore</th><th>Ruolo</th>${S.map(s=>`<th class="num">${s}</th>`).join('')}${ADMIN.on?'<th></th>':''}</tr></thead>
+        <tbody>${rowsHtml(list) || `<tr><td colspan="${2 + S.length + (ADMIN.on?1:0)}" class="dim">Nessun giocatore</td></tr>`}</tbody>
         ${foot||''}
       </table></div>`;
 
@@ -530,7 +566,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
 
       <div class="sec">Roster attivo</div>
       ${table(attivi, foot)}
-      ${tagliati.length?`<div class="sec">Tagliati (dead money)</div>${table(tagliati)}`:''}
+      ${tagliati.length?`<div class="sec">Tagliati (dead money)</div>${table(tagliati)}<p class="note">I giocatori tagliati pesano sul salary cap per <b>metà</b> del loro contratto.</p>`:''}
 
       <div class="sec">Scelte al draft</div>
       ${picksHtml}
@@ -563,6 +599,14 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
         (t.picks = t.picks || []).push({ y, rd, from });
         recomputeDirty(); renderTeam(name);
       });
+      app.querySelectorAll('button.taglia').forEach(b => b.addEventListener('click', ()=>{
+        L.players[+b.dataset.idx].s = 'TAGLIATO';
+        recomputeDirty(); renderTeam(name);
+      }));
+      app.querySelectorAll('button.reintegra').forEach(b => b.addEventListener('click', ()=>{
+        L.players[+b.dataset.idx].s = 'ATTIVO';
+        recomputeDirty(); renderTeam(name);
+      }));
     }
   }
 
@@ -757,7 +801,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     repo: 'filo22g15/fantaNba',   // owner/repo su GitHub
     branch: 'main',               // ramo pubblicato da GitHub Pages
     tokenKey: 'fnba_gh_token',
-    on: false, token: null, dirty: false, changes: [], orig: [], origPicks: {},
+    on: false, token: null, dirty: false, changes: [], orig: [], origPicks: {}, origStatus: [], origSal: [],
   };
 
   const pickKey = p => `${p.rd}° giro ${p.from} ${p.y}`;
@@ -771,6 +815,8 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
 
   function adminInit(){
     ADMIN.orig = L.players.map(p => p.t || '');
+    ADMIN.origStatus = L.players.map(p => p.s || '');
+    ADMIN.origSal = L.players.map(p => (p.sal || []).slice());
     ADMIN.origPicks = snapPicks();
     ADMIN.token = localStorage.getItem(ADMIN.tokenKey);
     ADMIN.on = !!ADMIN.token;
@@ -819,7 +865,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
   function adminLogout(){
     localStorage.removeItem(ADMIN.tokenKey);
     ADMIN.token = null; ADMIN.on = false;
-    L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; });   // scarta modifiche non pubblicate
+    L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; p.s = ADMIN.origStatus[p.__i]; p.sal = ADMIN.origSal[p.__i].slice(); });   // scarta modifiche non pubblicate
     restorePicks();
     ADMIN.changes = []; ADMIN.dirty = false;
     renderAdminBtn(); updatePublishBar(); route();
@@ -836,6 +882,16 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     L.players.forEach(p => {
       const o = ADMIN.orig[p.__i] || '', n = p.t || '';
       if(o !== n) ADMIN.changes.push(`${p.n}: ${o || 'svincolato'} → ${n || 'svincolato'}`);
+    });
+    // giocatori tagliati / reintegrati
+    L.players.forEach(p => {
+      const wasCut = ADMIN.origStatus[p.__i] === 'TAGLIATO', nowCut = p.s === 'TAGLIATO';
+      if(wasCut !== nowCut) ADMIN.changes.push(`${p.n}: ${nowCut ? 'tagliato' : 'reintegrato'}`);
+    });
+    // stipendi modificati
+    L.players.forEach(p => {
+      const o = ADMIN.origSal[p.__i] || [];
+      if((p.sal || []).some((v, i) => v !== (o[i] || 0))) ADMIN.changes.push(`${p.n}: stipendio modificato`);
     });
     // scelte al draft aggiunte/rimosse (rispetto allo stato di partenza)
     L.teams.forEach(t => {
@@ -867,7 +923,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
   }
 
   function adminDiscard(){
-    L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; });
+    L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; p.s = ADMIN.origStatus[p.__i]; p.sal = ADMIN.origSal[p.__i].slice(); });
     restorePicks();
     recomputeDirty(); route();
   }
@@ -895,6 +951,8 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
       await ghPut('data.js', payload, shaData, msg);
 
       ADMIN.orig = L.players.map(p => p.t || '');   // nuova base di partenza
+      ADMIN.origStatus = L.players.map(p => p.s || '');
+      ADMIN.origSal = L.players.map(p => (p.sal || []).slice());
       ADMIN.origPicks = snapPicks();
       ADMIN.changes = []; ADMIN.dirty = false;
       updatePublishBar();
