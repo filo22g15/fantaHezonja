@@ -20,6 +20,9 @@ Chiunque apra il sito vede tre sezioni (menu in alto):
   su una squadra per aprire la sua pagina (roster attivo, tagliati, **penali da tagli**,
   **scelte al draft** e **riepilogo cap rimanente** per ogni stagione).
 - **Recap** — spazio salariale di tutte le squadre, stagione per stagione, ordinato.
+- **Bacheca** — albo d'oro (campioni, conference e division), premi individuali (MVP/MIP/ROY/COY),
+  record di squadra e individuali, medagliere e maglie ritirate. Si aggiorna sia dall'Excel
+  (`aggiorna_bacheca.py`) sia direttamente da **Admin** sul sito (vedi *Modalità Admin*).
 
 ---
 
@@ -61,6 +64,7 @@ Uscendo dalla modalità Admin (riclic su ● Admin) le modifiche non pubblicate 
 | **Tagliare / reintegrare** | pagina Squadra | Pulsante **Taglia** (rosso) sugli attivi, **Reintegra** (verde) sui tagliati. |
 | **Azzerare una penale** | pagina Squadra | Nella sezione *Penali da tagli*, il pulsante **✕** rimuove la penale (es. quando il contratto residuo scade). |
 | **Gestire le scelte** | pagina Squadra, *Scelte al draft* | **↔** sposta una pick a un'altra squadra, **✕** la rimuove, **+ Aggiungi scelta** ne crea una nuova. |
+| **Aggiornare la Bacheca** | pagina **Bacheca** | In Admin la pagina diventa un editor: campi per campione/premi/conference/division/record/maglie. **+ Aggiungi riga** e **✕** per righe. Il medagliere si ricalcola da solo. Poi **Pubblica**. |
 | **Scambi (Trade)** | pagina **Trade** | Vedi sotto. |
 
 ### Registrare un taglio + rifirma
@@ -183,6 +187,29 @@ python aggiorna_dati.py FantaNBA.xlsx
 Dopo averlo eseguito, fai `git commit` + `git push` (oppure ricarica i file su GitHub) per
 pubblicare.
 
+### Aggiornare la Bacheca — `aggiorna_bacheca.py`
+Rigenera i dati della pagina **Bacheca** (albo d'oro, premi, record, medagliere, maglie ritirate)
+leggendo i tre Excel della lega e scrivendo il blocco `window.BACHECA` dentro `index.html` (e in
+`bacheca.js`).
+
+```
+python aggiorna_bacheca.py
+```
+
+Fonti lette (devono stare nella cartella del progetto):
+- `ALBO D'ORO & PREMI INDIVIDUALI - FantaNBA Hezonja.xlsx` — finals, conference/division, premi individuali;
+- `Il file dei Record del FantaNBA.xlsx` — record di squadra e individuali;
+- `FantaNBA.xlsx`, foglio *Bacheca* — maglie ritirate.
+
+Il **medagliere** (titoli per squadra) è calcolato dai campioni delle finals. È indipendente da
+`aggiorna_dati.py`: i due script toccano blocchi diversi (`window.BACHECA` vs `window.LEAGUE`) e non
+si sovrascrivono. Dopo, `git commit` + `git push` per pubblicare.
+
+> ⚠️ La Bacheca si può aggiornare **anche da Admin** sul sito. Attenzione: `aggiorna_bacheca.py`
+> **rigenera** l'intero `window.BACHECA` dall'Excel, quindi sovrascrive le modifiche fatte da Admin
+> che non hai riportato nell'Excel. Scegli un flusso solo: o aggiorni dall'Excel, o da Admin (e in tal
+> caso non rilanciare lo script, oppure tieni l'Excel allineato).
+
 ### Aggiungere un giocatore nuovo — `aggiungi_giocatore.py`
 Aggiunge uno o più giocatori come **free agent** (senza squadra), con ruolo e stipendio
 recuperati dal web.
@@ -206,8 +233,12 @@ premi **Pubblica**.
 | `data.js` | Copia dei dati (aggiornata insieme a `index.html` a ogni pubblicazione). |
 | `sincronizza.py` | Script: aggiorna ruoli e contratti dal web. |
 | `aggiorna_dati.py` | Script: rigenera i dati dall'Excel (`FantaNBA.xlsx`). |
+| `aggiorna_bacheca.py` | Script: rigenera la pagina Bacheca dai tre Excel. |
 | `aggiungi_giocatore.py` | Script: aggiunge un nuovo giocatore free agent. |
-| `FantaNBA.xlsx` | Excel "maestro" della lega: foglio *Contratti* + un foglio per squadra. |
+| `bacheca.js` | Copia dei dati della Bacheca (rigenerata da `aggiorna_bacheca.py`). |
+| `FantaNBA.xlsx` | Excel "maestro": foglio *Contratti* + un foglio per squadra + *Bacheca*. |
+| `ALBO D'ORO & PREMI INDIVIDUALI - FantaNBA Hezonja.xlsx` | Excel: albo d'oro e premi individuali. |
+| `Il file dei Record del FantaNBA.xlsx` | Excel: record di squadra e individuali. |
 
 ---
 
