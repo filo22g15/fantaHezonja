@@ -72,6 +72,7 @@
   /* ---------- tables ---------- */
   .tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel)}
   table{border-collapse:collapse; width:100%; min-width:820px}
+  table.recaptab{min-width:900px}
   thead th{
     font-family:'Barlow Condensed'; font-weight:600; font-size:14px; letter-spacing:.1em; text-transform:uppercase;
     color:var(--muted); text-align:left; padding:11px 12px; border-bottom:1px solid var(--line);
@@ -286,6 +287,59 @@
     main{padding:20px 14px 70px}
     h2.title{font-size:27px}
   }
+
+  /* ---------- mobile: layout a schede ---------- */
+  @media(max-width:760px){
+    /* header e menu: il logo va a capo, la nav scorre in orizzontale */
+    .hwrap{height:auto; min-height:56px; padding:8px 14px; flex-wrap:wrap; gap:8px 14px}
+    .logo h1{font-size:16px}
+    nav{margin-left:auto; gap:2px; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
+      scrollbar-width:none; padding-bottom:2px}
+    nav::-webkit-scrollbar{display:none}
+    nav a{padding:7px 11px; font-size:14px; white-space:nowrap; flex:none}
+    main{padding:20px 14px 72px}
+    h2.title{font-size:26px}
+    /* toolbar filtri: comodi da toccare, a piena larghezza */
+    .toolbar input{flex:1 1 100%}
+    .toolbar select{flex:1 1 calc(50% - 5px); padding-top:11px; padding-bottom:11px}
+    .count{margin-left:0; width:100%; order:5}
+    .capgrid{grid-template-columns:1fr 1fr; gap:10px}
+
+    /* tabelle marcate .tbl-cards -> una card per riga */
+    .tbl-cards{overflow:visible; border:none; background:none; border-radius:0}
+    .tbl-cards table{min-width:0; width:100%}
+    .tbl-cards thead{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+      clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0}   /* header nascosto ma leggibile dagli screen reader */
+    .tbl-cards tbody, .tbl-cards tfoot, .tbl-cards td{display:block; width:auto}
+    .tbl-cards tr{display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line);
+      border-radius:var(--radius); padding:12px 14px; margin-bottom:12px}
+    .tbl-cards tr:hover td{background:none}
+    .tbl-cards td{border:none; padding:7px 0; white-space:normal; text-align:right;
+      display:flex; align-items:center; justify-content:space-between; gap:14px}
+    .tbl-cards td:not(:last-child){border-bottom:1px solid rgba(42,56,73,.4)}
+    .tbl-cards td::before{content:attr(data-label); flex:none; text-align:left;
+      font-family:'Barlow Condensed'; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+      font-size:12px; color:var(--muted)}
+    .tbl-cards td[data-label=""]::before, .tbl-cards td:not([data-label])::before{content:none}
+    /* prima cella = titolo della card (nome giocatore/squadra) */
+    .tbl-cards td.cardtitle{order:-1; display:block; text-align:left; font-size:17px; padding:2px 0 9px; margin-bottom:2px;
+      border-bottom:1px solid var(--line)}
+    .tbl-cards td.cardtitle::before{content:none}
+    /* celle "larghe" (barra cap) su tutta la riga */
+    .tbl-cards td.wide{display:block; text-align:left}
+    .tbl-cards td.wide::before{display:block; margin-bottom:6px}
+    .tbl-cards td.wide .capbar{width:100%}
+    /* celle azioni admin: bottoni a destra, senza etichetta */
+    .tbl-cards td.actcell{justify-content:flex-end}
+    .tbl-cards td.actcell::before{content:none}
+    /* riga totale (tfoot) come card evidenziata */
+    .tbl-cards tfoot tr{background:var(--panel-2)}
+    /* riga "nessun giocatore" a piena larghezza */
+    .tbl-cards td[colspan]:not(.cardtitle){text-align:left; color:var(--muted)}
+    .tbl-cards td[colspan]::before{content:none}
+    /* celle vuote (es. colonna azioni non presente) non creano righe fantasma */
+    .tbl-cards td:empty{display:none}
+  }
 </style>
 </head>
 <body>
@@ -440,7 +494,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap":215000000, "seasons":
         </select>
         <span class="count" id="cnt"></span>
       </div>
-      <div class="tablewrap"><table id="ctab"></table></div>
+      <div class="tablewrap tbl-cards"><table id="ctab"></table></div>
       <p class="note">T = Team Option · P = Player Option · NG = Not Guaranteed. L'icona ↗ apre il profilo del giocatore su Spotrac. Gli importi in <span style="color:#E8C55B;font-style:italic">giallo (R)</span> sono rinnovi già firmati in NBA ma non ancora confermati dalla lega: non contano nel cap. Clicca sulle intestazioni per ordinare.</p>`;
     const inp = document.getElementById('q');
     inp.addEventListener('input', e=>{cState.q=e.target.value; drawContracts();});
@@ -468,8 +522,8 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap":215000000, "seasons":
     const th = (key,label,num) => `<th class="${num?'num':''}"><button data-k="${key}">${label} ${arrow(key)}</button></th>`;
     document.getElementById('cnt').textContent = rows.length + ' giocatori';
     const salCellEdit = (p,i) => cState.edit.has(p.__i)
-      ? `<td class="num"><input class="saledit" type="number" min="0" step="100000" data-idx="${p.__i}" data-s="${i}" value="${p.sal[i]||0}"></td>`
-      : `<td class="num">${salCell(p,i)}</td>`;
+      ? `<td class="num" data-label="${esc(S[i])}"><input class="saledit" type="number" min="0" step="100000" data-idx="${p.__i}" data-s="${i}" value="${p.sal[i]||0}"></td>`
+      : `<td class="num" data-label="${esc(S[i])}">${salCell(p,i)}</td>`;
     const ncol = 4 + S.length + (ADMIN.on?1:0);
     const deadEditRow = p => {
       const d = p.dead || {t:'', sal:[0,0,0,0,0]};
@@ -487,16 +541,16 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap":215000000, "seasons":
       ? ` <a class="deadtag" href="#/squadra/${slug(p.dead.t)}" title="Penale da taglio a carico di ${esc(p.dead.t)}">DM→${esc(p.dead.t)}</a>` : '';
     document.getElementById('ctab').innerHTML = `
       <thead><tr>
-        ${th('n','Giocatore')}${th('t','FantaTeam')}${th('r','Ruolo')}${th('s','Stato')}
+        ${th('r','Ruolo')}${th('n','Giocatore')}${th('t','FantaTeam')}${th('s','Stato')}
         ${S.map((s,i)=>th(String(i), s, true)).join('')}${ADMIN.on?'<th></th>':''}
       </tr></thead>
       <tbody>${rows.map(p=>`
         <tr>
-          <td class="pname">${esc(p.n)} ${spotrac(p.n)}${deadTag(p)}</td>
-          <td class="dim">${ADMIN.on ? teamSelect(p) : (p.t?`<a href="#/squadra/${slug(p.t)}">${esc(p.t)}</a>`:'<span class="st fa">FREE AGENT</span>')}</td>
-          <td><span class="role">${esc(p.r||'—')}</span></td>
-          <td><span class="st ${stClass(statusOf(p))}">${esc(p.t?(p.s||''):'')}</span></td>
-          ${p.sal.map((v,i)=>ADMIN.on ? salCellEdit(p,i) : `<td class="num">${salCell(p,i)}</td>`).join('')}
+          <td data-label="Ruolo"><span class="role">${esc(p.r||'—')}</span></td>
+          <td class="pname cardtitle" data-label="Giocatore">${esc(p.n)} ${spotrac(p.n)}${deadTag(p)}</td>
+          <td class="dim" data-label="FantaTeam">${ADMIN.on ? teamSelect(p) : (p.t?`<a href="#/squadra/${slug(p.t)}">${esc(p.t)}</a>`:'<span class="st fa">FREE AGENT</span>')}</td>
+          <td data-label="Stato"><span class="st ${stClass(statusOf(p))}">${esc(p.t?(p.s||''):'')}</span></td>
+          ${p.sal.map((v,i)=>ADMIN.on ? salCellEdit(p,i) : `<td class="num" data-label="${esc(S[i])}">${salCell(p,i)}</td>`).join('')}
           ${ADMIN.on?`<td class="actcell">${(p.pnd && p.pnd.some(v=>v))?`<button class="rinnova" type="button" data-idx="${p.__i}" title="Conferma rinnovo: rende effettivo il contratto in giallo (entra nel cap)">✓R</button>`:''}<button class="saltoggle${cState.edit.has(p.__i)?' on':''}" type="button" data-idx="${p.__i}" title="Modifica stipendio e penale">${cState.edit.has(p.__i)?'✓':'✎'}</button></td>`:''}
         </tr>${ADMIN.on && cState.edit.has(p.__i) ? deadEditRow(p) : ''}`).join('')}
       </tbody>`;
@@ -587,43 +641,56 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap":215000000, "seasons":
   }
 
   /* ---------- SQUADRA ---------- */
+  const tState = {sort:'0', dir:1};   // ordinamento tabelle pagina squadra (default: cap stagione corrente ↓)
+
   function renderTeam(name){
     const t = L.teams.find(x=>x.name===name);
     if(!t){ app.innerHTML = `<div class="empty">Squadra non trovata. <a href="#/squadre" style="color:var(--ball)">Torna alle squadre</a></div>`; return; }
     const roster = teamPlayers(name);
-    const attivi = roster.filter(p=>p.s!=='TAGLIATO').sort((a,b)=>b.sal[0]-a.sal[0]);
-    const tagliati = roster.filter(p=>p.s==='TAGLIATO').sort((a,b)=>b.sal[0]-a.sal[0]);
-    const penali = deadOf(name).sort((a,b)=>(b.dead.sal[0]||0)-(a.dead.sal[0]||0));
+    const sortRoster = (list, getSal) => list.slice().sort((a,b)=>{
+      const k = tState.sort, d = tState.dir;
+      if(k==='n'||k==='r'){ const va=(a[k]||'').toLowerCase(), vb=(b[k]||'').toLowerCase(); return va<vb?-d:va>vb?d:0; }
+      const i = +k; return d*(getSal(b,i)-getSal(a,i));
+    });
+    const salOf  = (p,i) => (p.sal && p.sal[i]) || 0;
+    const deadOfSal = (p,i) => (p.dead && p.dead.sal && p.dead.sal[i]) || 0;
+    const attivi = sortRoster(roster.filter(p=>p.s!=='TAGLIATO'), salOf);
+    const tagliati = sortRoster(roster.filter(p=>p.s==='TAGLIATO'), salOf);
+    const penali = sortRoster(deadOf(name), deadOfSal);
     const {tot, cut, pnd} = capTotals(name);
+
+    const tArrow = key => tState.sort===key ? `<span class="dir">${tState.dir===1?'▾':'▴'}</span>` : '';
+    const tth = (key,label,num) => `<th class="${num?'num':''}"><button data-tk="${key}">${label} ${tArrow(key)}</button></th>`;
+    const rosterHead = `<thead><tr>${tth('r','Ruolo')}${tth('n','Giocatore')}${S.map((s,i)=>tth(String(i),s,true)).join('')}${ADMIN.on?'<th></th>':''}</tr></thead>`;
 
     const rowsHtml = list => list.map(p=>`
       <tr>
-        <td class="pname">${esc(p.n)} ${spotrac(p.n)}</td>
-        <td><span class="role">${esc(p.r||'—')}</span></td>
-        ${p.sal.map((v,i)=>`<td class="num">${salCell(p,i)}</td>`).join('')}
+        <td data-label="Ruolo"><span class="role">${esc(p.r||'—')}</span></td>
+        <td class="pname cardtitle" data-label="Giocatore">${esc(p.n)} ${spotrac(p.n)}</td>
+        ${p.sal.map((v,i)=>`<td class="num" data-label="${esc(S[i])}">${salCell(p,i)}</td>`).join('')}
         ${ADMIN.on ? `<td class="actcell">${p.s==='TAGLIATO'
           ? `<button class="reintegra" type="button" data-idx="${p.__i}" title="Riporta nel roster attivo">Reintegra</button>`
           : `<button class="taglia" type="button" data-idx="${p.__i}" title="Taglia (metà cap)">Taglia</button>`}</td>` : ''}
       </tr>`).join('');
 
     const table = (list, foot) => `
-      <div class="tablewrap"><table>
-        <thead><tr><th>Giocatore</th><th>Ruolo</th>${S.map(s=>`<th class="num">${s}</th>`).join('')}${ADMIN.on?'<th></th>':''}</tr></thead>
+      <div class="tablewrap tbl-cards"><table>
+        ${rosterHead}
         <tbody>${rowsHtml(list) || `<tr><td colspan="${2 + S.length + (ADMIN.on?1:0)}" class="dim">Nessun giocatore</td></tr>`}</tbody>
         ${foot||''}
       </table></div>`;
 
-    const foot = `<tfoot><tr><td colspan="2">Totale cap</td>${tot.map(v=>`<td class="num">${fmtM(v)}</td>`).join('')}</tr></tfoot>`;
+    const foot = `<tfoot><tr><td colspan="2" class="cardtitle">Totale cap</td>${tot.map((v,i)=>`<td class="num" data-label="${esc(S[i])}">${fmtM(v)}</td>`).join('')}</tr></tfoot>`;
 
     // ---- penali da tagli: giocatore tagliato qui e poi rifirmato da un'altra squadra ----
     const penaliTable = list => `
-      <div class="tablewrap"><table>
-        <thead><tr><th>Giocatore</th><th>Ruolo</th>${S.map(s=>`<th class="num">${s}</th>`).join('')}${ADMIN.on?'<th></th>':''}</tr></thead>
+      <div class="tablewrap tbl-cards"><table>
+        ${rosterHead}
         <tbody>${list.map(p=>`
           <tr>
-            <td class="pname">${esc(p.n)} ${spotrac(p.n)} <span class="dim">→ ${p.t?esc(p.t):'svincolato'}</span></td>
-            <td><span class="role">${esc(p.r||'—')}</span></td>
-            ${p.dead.sal.map(v=>`<td class="num">${fmtM(v)}</td>`).join('')}
+            <td data-label="Ruolo"><span class="role">${esc(p.r||'—')}</span></td>
+            <td class="pname cardtitle" data-label="Giocatore">${esc(p.n)} ${spotrac(p.n)} <span class="dim">→ ${p.t?esc(p.t):'svincolato'}</span></td>
+            ${p.dead.sal.map((v,i)=>`<td class="num" data-label="${esc(S[i])}">${fmtM(v)}</td>`).join('')}
             ${ADMIN.on?`<td class="actcell"><button class="taglia delpenale" type="button" data-idx="${p.__i}" title="Azzera penale">✕</button></td>`:''}
           </tr>`).join('')}</tbody>
       </table></div>`;
@@ -649,14 +716,14 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap":215000000, "seasons":
     const picksHtml = picksBody + (ADMIN.on ? `<button class="addpick" type="button">+ Aggiungi scelta</button>` : '');
 
     // ---- riepilogo cap: rimanente rispetto al totale ----
-    const capFootHtml = `<div class="tablewrap"><table>
+    const capFootHtml = `<div class="tablewrap tbl-cards"><table>
       <thead><tr><th>Salary cap</th>${S.map(s=>`<th class="num">${s}</th>`).join('')}</tr></thead>
       <tbody>
-        <tr><td class="dim">Cap totale</td>${CAPS.map(c=>`<td class="num dim">${fmtM(c)}</td>`).join('')}</tr>
-        <tr><td>Utilizzato</td>${tot.map(v=>`<td class="num">${fmtM(v)}</td>`).join('')}</tr>
-        <tr><td><b>Rimanente</b></td>${tot.map((v,i)=>{
+        <tr><td class="dim cardtitle">Cap totale</td>${CAPS.map((c,i)=>`<td class="num dim" data-label="${esc(S[i])}">${fmtM(c)}</td>`).join('')}</tr>
+        <tr><td class="cardtitle">Utilizzato</td>${tot.map((v,i)=>`<td class="num" data-label="${esc(S[i])}">${fmtM(v)}</td>`).join('')}</tr>
+        <tr><td class="cardtitle"><b>Rimanente</b></td>${tot.map((v,i)=>{
           const sp = CAPS[i] - v;
-          return `<td class="num" style="color:${sp<0?'var(--loss)':sp>0?'var(--win)':'var(--muted)'}">${sp<0?'−':''}${fmtM(Math.abs(sp))}</td>`;
+          return `<td class="num" data-label="${esc(S[i])}" style="color:${sp<0?'var(--loss)':sp>0?'var(--win)':'var(--muted)'}">${sp<0?'−':''}${fmtM(Math.abs(sp))}</td>`;
         }).join('')}</tr>
       </tbody>
     </table></div>`;
@@ -695,6 +762,15 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap":215000000, "seasons":
       <div class="sec">Cap rimanente</div>
       ${capFootHtml}
     `;
+
+    // ordinamento tabelle (per tutti, non solo admin): clic sulle intestazioni
+    app.querySelectorAll('th button[data-tk]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const k = b.dataset.tk;
+        if(tState.sort===k) tState.dir*=-1; else { tState.sort=k; tState.dir=1; }
+        renderTeam(name);
+      });
+    });
 
     if(ADMIN.on){
       app.querySelectorAll('select.pickmove').forEach(sel => sel.addEventListener('change', ()=>{
@@ -748,21 +824,21 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap":215000000, "seasons":
         <button id="avanzaStagione" class="avanza" type="button">⏭ Avanza stagione</button>
         <span class="note">Passa alla stagione successiva: rimuove <b>${esc(S[0])}</b> dalla finestra dei contratti, fa scorrere gli stipendi di un anno, elimina le scelte del draft ${parseInt(S[0],10)+1} e assegna a ogni squadra le sue 3 pick del nuovo draft. Lo storico (Bacheca) resta.</span>
       </div>` : ''}
-      <div class="tablewrap"><table style="min-width:900px">
+      <div class="tablewrap tbl-cards"><table class="recaptab">
         <thead><tr><th>Squadra</th>${S.map(s=>`<th class="num">${s}</th>`).join('')}<th style="width:26%">Cap ${esc(S[0])}</th></tr></thead>
         <tbody>
           ${data.map(({t,tot})=>`
             <tr>
-              <td class="pname"><a href="#/squadra/${slug(t.name)}">${esc(t.name)}</a></td>
+              <td class="pname cardtitle" data-label="Squadra"><a href="#/squadra/${slug(t.name)}">${esc(t.name)}</a></td>
               ${tot.map((v,i)=>{
                 const sp = CAPS[i] - v;
-                return `<td class="num" style="color:${sp<0?'var(--loss)':sp>0?'var(--win)':'var(--muted)'}">${sp<0?'−':''}${(Math.abs(sp)/1e6).toFixed(1)}M</td>`;
+                return `<td class="num" data-label="${esc(S[i])}" style="color:${sp<0?'var(--loss)':sp>0?'var(--win)':'var(--muted)'}">${sp<0?'−':''}${(Math.abs(sp)/1e6).toFixed(1)}M</td>`;
               }).join('')}
-              <td>${capBar(tot[0], CAPS[0])}</td>
+              <td class="wide" data-label="Cap ${esc(S[0])}">${capBar(tot[0], CAPS[0])}</td>
             </tr>`).join('')}
         </tbody>
-        <tfoot><tr><td>Totale lega (usato)</td>
-          ${S.map((_,i)=>`<td class="num">${(data.reduce((a,d)=>a+d.tot[i],0)/1e6).toFixed(0)}M</td>`).join('')}
+        <tfoot><tr><td class="cardtitle">Totale lega (usato)</td>
+          ${S.map((_,i)=>`<td class="num" data-label="${esc(S[i])}">${(data.reduce((a,d)=>a+d.tot[i],0)/1e6).toFixed(0)}M</td>`).join('')}
           <td></td></tr></tfoot>
       </table></div>
       <div class="legend">
