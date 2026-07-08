@@ -177,6 +177,9 @@
   button.saltoggle{border:1px solid var(--line); border-radius:6px; color:var(--muted); font-size:13px; line-height:1; padding:3px 8px}
   button.saltoggle:hover{color:var(--ball); border-color:var(--ball)}
   button.saltoggle.on{color:var(--ball); border-color:var(--ball); background:var(--ball-soft)}
+  button.rinnova{margin-right:5px; border:1px solid #E8C55B; border-radius:6px; color:#E8C55B; font-family:'Barlow Condensed';
+    font-weight:700; font-size:12px; letter-spacing:.04em; line-height:1; padding:3px 7px}
+  button.rinnova:hover{background:rgba(232,197,91,.16)}
 
   /* ---------- recap ---------- */
   .legend{display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); font-size:13px; margin:10px 2px 0}
@@ -417,7 +420,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
           <td><span class="role">${esc(p.r||'—')}</span></td>
           <td><span class="st ${stClass(statusOf(p))}">${esc(p.t?(p.s||''):'')}</span></td>
           ${p.sal.map((v,i)=>ADMIN.on ? salCellEdit(p,i) : `<td class="num">${salCell(p,i)}</td>`).join('')}
-          ${ADMIN.on?`<td class="actcell"><button class="saltoggle${cState.edit.has(p.__i)?' on':''}" type="button" data-idx="${p.__i}" title="Modifica stipendio">${cState.edit.has(p.__i)?'✓':'✎'}</button></td>`:''}
+          ${ADMIN.on?`<td class="actcell">${(p.pnd && p.pnd.some(v=>v))?`<button class="rinnova" type="button" data-idx="${p.__i}" title="Conferma rinnovo: rende effettivo il contratto in giallo (entra nel cap)">✓R</button>`:''}<button class="saltoggle${cState.edit.has(p.__i)?' on':''}" type="button" data-idx="${p.__i}" title="Modifica stipendio">${cState.edit.has(p.__i)?'✓':'✎'}</button></td>`:''}
         </tr>`).join('')}
       </tbody>`;
     document.querySelectorAll('#ctab thead button').forEach(b=>{
@@ -439,6 +442,15 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
         const idx = +b.dataset.idx;
         if(cState.edit.has(idx)) cState.edit.delete(idx); else cState.edit.add(idx);
         drawContracts();
+      });
+    });
+    document.querySelectorAll('#ctab button.rinnova').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const p = L.players[+b.dataset.idx];
+        if(confirm(`Confermare il rinnovo di ${p.n}? Gli importi in giallo diventano contratto effettivo e contano nel cap.`)){
+          confermaRinnovo(p);
+          drawContracts();
+        }
       });
     });
     document.querySelectorAll('#ctab input.saledit').forEach(inp=>{
@@ -801,7 +813,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     repo: 'filo22g15/fantaNba',   // owner/repo su GitHub
     branch: 'main',               // ramo pubblicato da GitHub Pages
     tokenKey: 'fnba_gh_token',
-    on: false, token: null, dirty: false, changes: [], orig: [], origPicks: {}, origStatus: [], origSal: [],
+    on: false, token: null, dirty: false, changes: [], orig: [], origPicks: {}, origStatus: [], origSal: [], origPnd: [],
   };
 
   const pickKey = p => `${p.rd}° giro ${p.from} ${p.y}`;
@@ -817,6 +829,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
     ADMIN.orig = L.players.map(p => p.t || '');
     ADMIN.origStatus = L.players.map(p => p.s || '');
     ADMIN.origSal = L.players.map(p => (p.sal || []).slice());
+    ADMIN.origPnd = L.players.map(p => p.pnd ? p.pnd.slice() : null);
     ADMIN.origPicks = snapPicks();
     ADMIN.token = localStorage.getItem(ADMIN.tokenKey);
     ADMIN.on = !!ADMIN.token;
@@ -865,7 +878,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
   function adminLogout(){
     localStorage.removeItem(ADMIN.tokenKey);
     ADMIN.token = null; ADMIN.on = false;
-    L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; p.s = ADMIN.origStatus[p.__i]; p.sal = ADMIN.origSal[p.__i].slice(); });   // scarta modifiche non pubblicate
+    L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; p.s = ADMIN.origStatus[p.__i]; p.sal = ADMIN.origSal[p.__i].slice(); restorePnd(p); });   // scarta modifiche non pubblicate
     restorePicks();
     ADMIN.changes = []; ADMIN.dirty = false;
     renderAdminBtn(); updatePublishBar(); route();
@@ -873,6 +886,13 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
 
   function movePlayer(p, nuovaSquadra){
     p.t = nuovaSquadra || '';
+    recomputeDirty();
+  }
+
+  function confermaRinnovo(p){
+    if(!p.pnd) return;
+    p.pnd.forEach((v, i) => { if(v && !p.sal[i]) p.sal[i] = v; });   // il giallo diventa contratto vero
+    delete p.pnd;
     recomputeDirty();
   }
 
@@ -888,10 +908,14 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
       const wasCut = ADMIN.origStatus[p.__i] === 'TAGLIATO', nowCut = p.s === 'TAGLIATO';
       if(wasCut !== nowCut) ADMIN.changes.push(`${p.n}: ${nowCut ? 'tagliato' : 'reintegrato'}`);
     });
-    // stipendi modificati
+    // stipendi modificati / rinnovi confermati
     L.players.forEach(p => {
-      const o = ADMIN.origSal[p.__i] || [];
-      if((p.sal || []).some((v, i) => v !== (o[i] || 0))) ADMIN.changes.push(`${p.n}: stipendio modificato`);
+      const oSal = ADMIN.origSal[p.__i] || [];
+      const salChanged = (p.sal || []).some((v, i) => v !== (oSal[i] || 0));
+      const oPnd = ADMIN.origPnd[p.__i] || [], nPnd = p.pnd || [];
+      const pndChanged = [0,1,2,3,4].some(i => (oPnd[i] || 0) !== (nPnd[i] || 0));
+      if(pndChanged) ADMIN.changes.push(`${p.n}: rinnovo confermato`);
+      else if(salChanged) ADMIN.changes.push(`${p.n}: stipendio modificato`);
     });
     // scelte al draft aggiunte/rimosse (rispetto allo stato di partenza)
     L.teams.forEach(t => {
@@ -923,9 +947,14 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
   }
 
   function adminDiscard(){
-    L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; p.s = ADMIN.origStatus[p.__i]; p.sal = ADMIN.origSal[p.__i].slice(); });
+    L.players.forEach(p => { p.t = ADMIN.orig[p.__i]; p.s = ADMIN.origStatus[p.__i]; p.sal = ADMIN.origSal[p.__i].slice(); restorePnd(p); });
     restorePicks();
     recomputeDirty(); route();
+  }
+
+  function restorePnd(p){
+    const o = ADMIN.origPnd[p.__i];
+    if(o) p.pnd = o.slice(); else delete p.pnd;
   }
 
   async function adminPublish(){
@@ -953,6 +982,7 @@ window.LEAGUE = {"league": "FantaHezonja Champions", "cap": 215000000, "seasons"
       ADMIN.orig = L.players.map(p => p.t || '');   // nuova base di partenza
       ADMIN.origStatus = L.players.map(p => p.s || '');
       ADMIN.origSal = L.players.map(p => (p.sal || []).slice());
+      ADMIN.origPnd = L.players.map(p => p.pnd ? p.pnd.slice() : null);
       ADMIN.origPicks = snapPicks();
       ADMIN.changes = []; ADMIN.dirty = false;
       updatePublishBar();
