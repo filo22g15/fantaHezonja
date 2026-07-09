@@ -10,6 +10,7 @@ async function main() {
         found: s.found,
         slug: s.slug,
         season: s.season,
+        scoring: s.scoring,
         header: s.header,
         season_line: s.season_line,
         last5: s.last5,
@@ -17,8 +18,7 @@ async function main() {
         last20: s.last20,
         monthly: s.monthly,
         games: s.gamelog.length,
-        firstGame: s.gamelog[0],
-        lastGame: s.gamelog[s.gamelog.length - 1],
+        recentGames: s.gamelog.filter((g) => (g.min ?? 0) > 0).slice(0, 4),
       },
       null,
       2

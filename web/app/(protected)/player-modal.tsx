@@ -104,9 +104,15 @@ function ModalBody({ st }: { st: State }) {
           <div className="pm-card" key={c.k}>
             <div className="pm-card-k">{c.k}</div>
             <div className="pm-card-fppm">{line(c.l)}</div>
-            <div className="pm-card-fppg">{lineG(c.l)} FPPG</div>
+            <div className="pm-card-fppg">
+              {lineG(c.l)} FPPG · {c.l.gp} GP
+            </div>
           </div>
         ))}
+      </div>
+      <div className="pm-note">
+        FP e FPPM calcolati col <strong>punteggio della lega</strong> (custom), non con quello
+        standard di sports.ws.
       </div>
 
       {/* Split mensili */}
@@ -118,6 +124,7 @@ function ModalBody({ st }: { st: State }) {
               <thead>
                 <tr>
                   <th>Mese</th>
+                  <th>GP</th>
                   <th>FPPG</th>
                   <th>FPPM</th>
                 </tr>
@@ -126,6 +133,7 @@ function ModalBody({ st }: { st: State }) {
                 {d.monthly.map((m) => (
                   <tr key={m.month}>
                     <td>{MESI[m.month] ?? m.month}</td>
+                    <td>{m.gp}</td>
                     <td>{m.fppg?.toFixed(1) ?? '—'}</td>
                     <td className="pm-strong">{m.fppm?.toFixed(2) ?? '—'}</td>
                   </tr>
@@ -152,6 +160,7 @@ function ModalBody({ st }: { st: State }) {
                   <th>AST</th>
                   <th>BLK</th>
                   <th>STL</th>
+                  <th>TO</th>
                   <th>FP</th>
                   <th>FPPM</th>
                 </tr>
@@ -167,6 +176,7 @@ function ModalBody({ st }: { st: State }) {
                     <td>{nz(g.ast, 0)}</td>
                     <td>{nz(g.blk, 0)}</td>
                     <td>{nz(g.stl, 0)}</td>
+                    <td>{nz(g.to, 0)}</td>
                     <td>{nz(g.fp)}</td>
                     <td className="pm-strong">{nz(g.fppm, 2)}</td>
                   </tr>

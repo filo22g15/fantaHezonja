@@ -106,9 +106,28 @@ async function caphitFromUrl(url: string, stagioni: string[]): Promise<Record<st
 // ── Statistiche fantasy da sports.ws (pagina pubblica /nba/<slug>) ──────────────
 // Usato dalla route /api/player-stats per il popup statistiche giocatore.
 
+// Punteggio CUSTOM della lega (FantaNBA Hezonja). I valori FP/FPPM della pagina
+// sports.ws usano il punteggio standard del sito: qui li RICALCOLIAMO dal tabellino
+// grezzo con questi pesi. Per cambiare le regole basta modificare questa costante.
+export const SCORING = {
+  ftm: 2.0, // tiri liberi segnati
+  fta: -1.0, // tiri liberi tentati
+  p2m: 3.0, // canestri da 2 segnati
+  p2a: -1.0, // tiri da 2 tentati
+  p3m: 4.0, // canestri da 3 segnati
+  p3a: -1.0, // tiri da 3 tentati
+  orb: 1.0, // rimbalzi offensivi
+  drb: 1.0, // rimbalzi difensivi
+  ast: 1.0, // assist
+  blk: 1.3, // stoppate
+  stl: 1.5, // palle rubate
+  to: -1.0, // palle perse
+};
+
 export interface PlayerStatLine {
-  fppg: number | null;
-  fppm: number | null;
+  gp: number; // partite giocate (min > 0) nella finestra
+  fppg: number | null; // fantasy points per game (media, punteggio lega)
+  fppm: number | null; // fantasy points per minute (punteggio lega)
 }
 export interface PlayerGame {
   date: string; // YYYY-MM-DD
@@ -119,8 +138,9 @@ export interface PlayerGame {
   ast: number | null;
   blk: number | null;
   stl: number | null;
-  fp: number | null;
-  fppm: number | null;
+  to: number | null;
+  fp: number | null; // fantasy points CUSTOM di questa partita
+  fppm: number | null; // fp / minuti
 }
 export interface PlayerStats {
   found: boolean;
@@ -128,6 +148,7 @@ export interface PlayerStats {
   slug: string;
   url: string; // link alla pagina sports.ws
   season: string | null; // es. "2025-26"
+  scoring: 'custom'; // i punteggi sono ricalcolati con la formula della lega
   header: {
     team: string | null; // sigla squadra (es. "BOS")
     pos: string | null;
@@ -136,12 +157,12 @@ export interface PlayerStats {
     age: string | null;
     photo: string | null; // URL assoluto headshot
   };
-  // FPPM/FPPG per finestra temporale
+  // FPPM/FPPG (punteggio lega) per finestra temporale
   season_line: PlayerStatLine;
   last5: PlayerStatLine;
   last10: PlayerStatLine;
   last20: PlayerStatLine;
-  monthly: { month: string; fppg: number | null; fppm: number | null }[];
+  monthly: { month: string; gp: number; fppg: number | null; fppm: number | null }[];
   gamelog: PlayerGame[]; // ordine cronologico inverso (più recente prima)
 }
 
@@ -152,31 +173,81 @@ const toNum = (s: string | undefined): number | null => {
   return Number.isFinite(v) ? v : null;
 };
 const numeri = (s: string): string[] => s.match(/-?\d+\.?\d*/g) || [];
+const r2 = (v: number) => Math.round(v * 100) / 100;
 
-// Estrae FPPG (8° valore) e FPPM (9° valore) da un blocco riepilogo (quickseason/…).
-function lineaSommario(html: string, cls: string): PlayerStatLine {
-  const re = new RegExp(`class="${cls}"([\\s\\S]*?)(?:class="quick|2025-26 Game Log|Game Log)`);
-  const m = html.match(re);
-  if (!m) return { fppg: null, fppm: null };
-  const dopo = senzaTag(m[1]).split('FPPM')[1] || '';
-  const v = numeri(dopo).slice(0, 9);
-  return v.length >= 9 ? { fppg: toNum(v[7]), fppm: toNum(v[8]) } : { fppg: null, fppm: null };
+const MESI_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Tabellino secondario di una partita (dal blocco "more-game-log").
+interface SecLine {
+  fgm: number; fga: number; tpm: number; tpa: number;
+  ftm: number; fta: number; orb: number; drb: number; to: number;
+}
+
+// FP con la formula custom della lega, dai dati grezzi primari + secondari.
+function fpCustom(p: PlayerGame, s: SecLine): number {
+  const p2m = s.fgm - s.tpm; // canestri da 2 = FG totali − da 3
+  const p2a = s.fga - s.tpa;
+  return (
+    SCORING.ftm * s.ftm + SCORING.fta * s.fta +
+    SCORING.p2m * p2m + SCORING.p2a * p2a +
+    SCORING.p3m * s.tpm + SCORING.p3a * s.tpa +
+    SCORING.orb * s.orb + SCORING.drb * s.drb +
+    SCORING.ast * (p.ast ?? 0) + SCORING.blk * (p.blk ?? 0) + SCORING.stl * (p.stl ?? 0) +
+    SCORING.to * s.to
+  );
+}
+
+// Aggrega una lista di partite in FPPG/FPPM (solo partite giocate, min > 0).
+function aggrega(games: PlayerGame[]): PlayerStatLine {
+  const giocate = games.filter((g) => (g.min ?? 0) > 0 && g.fp !== null);
+  if (!giocate.length) return { gp: 0, fppg: null, fppm: null };
+  const totFp = giocate.reduce((a, g) => a + (g.fp as number), 0);
+  const totMin = giocate.reduce((a, g) => a + (g.min as number), 0);
+  return {
+    gp: giocate.length,
+    fppg: r2(totFp / giocate.length),
+    fppm: totMin > 0 ? Math.round((totFp / totMin) * 1000) / 1000 : null,
+  };
+}
+
+// Estrae le righe del tabellino secondario (FGs, 3Ps, FTs, OR/DR, TO), stesso
+// ordine cronologico inverso del primario → si allineano per indice.
+function tabellinoSecondario(html: string): SecLine[] {
+  const start = html.indexOf('more-game-log');
+  if (start < 0) return [];
+  const end = html.indexOf('Career Stats', start);
+  const block = html.slice(start, end > 0 ? end : undefined);
+  // via il doppione desktop-hide, poi spezzo sulle date (una per riga)
+  const clean = block.replace(/<span class="desktop-hide[^"]*">[\s\S]*?<\/span>/g, '');
+  const rows = clean.split(/<span class="mobile-hide">&nbsp;[A-Z][a-z]{2}\. \d+<\/span>/);
+  const out: SecLine[] = [];
+  const re =
+    /(\d+)-(\d+)\s+[\d.]+\s+(\d+)-(\d+)\s+[\d.]+\s+(\d+)-(\d+)\s+[\d.]+\s+(\d+)\s*\/\s*(\d+)\s+(\d+)/;
+  for (let i = 1; i < rows.length; i++) {
+    const m = senzaTag(rows[i]).match(re);
+    if (!m) { out.push({ fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, orb: 0, drb: 0, to: 0 }); continue; }
+    const [, fgm, fga, tpm, tpa, ftm, fta, orb, drb, to] = m.map(Number);
+    out.push({ fgm, fga, tpm, tpa, ftm, fta, orb, drb, to });
+  }
+  return out;
 }
 
 export async function playerStats(nome: string): Promise<PlayerStats> {
   const sl = slug(nome);
   const url = `${SPORTSWS}/nba/${sl}`;
+  const zero: PlayerStatLine = { gp: 0, fppg: null, fppm: null };
   const vuoto: PlayerStats = {
     found: false,
     name: nome,
     slug: sl,
     url,
     season: null,
+    scoring: 'custom',
     header: { team: null, pos: null, height: null, weight: null, age: null, photo: null },
-    season_line: { fppg: null, fppm: null },
-    last5: { fppg: null, fppm: null },
-    last10: { fppg: null, fppm: null },
-    last20: { fppg: null, fppm: null },
+    season_line: zero,
+    last5: zero,
+    last10: zero,
+    last20: zero,
     monthly: [],
     gamelog: [],
   };
@@ -199,40 +270,17 @@ export async function playerStats(nome: string): Promise<PlayerStats> {
     photo: photoRel ? SPORTSWS + photoRel : null,
   };
 
-  // Riepilogo per finestra
-  const season_line = lineaSommario(html, 'quickseason');
-  const last5 = lineaSommario(html, 'quicklastfive');
-  const last10 = lineaSommario(html, 'quicklastten');
-  const last20 = lineaSommario(html, 'quicklasttwenty');
-
-  // Split mensili
-  const monthly: PlayerStats['monthly'] = [];
-  const msStart = html.indexOf('class="monthly-stats"');
-  if (msStart >= 0) {
-    const msEnd = html.indexOf('role-stats', msStart);
-    const seg = senzaTag(html.slice(msStart, msEnd > 0 ? msEnd : msStart + 8000));
-    const dopo = seg.split('FPPM')[1] || '';
-    const reMese = /([A-Z][a-z]{2})\.\s+([-\d.\s]+?)(?=[A-Z][a-z]{2}\.|$)/g;
-    let mm: RegExpExecArray | null;
-    while ((mm = reMese.exec(dopo))) {
-      const v = numeri(mm[2]).slice(0, 9);
-      if (v.length >= 9) monthly.push({ month: mm[1], fppg: toNum(v[7]), fppm: toNum(v[8]) });
-    }
-  }
-
-  // Game log (ordine cronologico inverso)
+  // Game log primario (min/pts/reb/ast/blk/stl), ordine cronologico inverso.
   const gamelog: PlayerGame[] = [];
   const glStart = html.indexOf('basic-game-log');
   if (glStart >= 0) {
     const glEnd = html.indexOf('Career Stats', glStart);
     const block = html.slice(glStart, glEnd > 0 ? glEnd : undefined);
-    // ogni riga è ancorata dal link partita: <a href="/nba/YYYY-MM-DD/slug"
     const parts = block.split(/<a href="\/nba\/(\d{4}-\d{2}-\d{2})\/[^"]*"/);
     for (let i = 1; i < parts.length; i += 2) {
       const date = parts[i];
       const body = parts[i + 1] || '';
       const chiuso = body.indexOf('</a>');
-      // opp: dentro il link, saltando il resto del tag <a ...> e il doppione desktop-hide.
       let opp: string | null = null;
       if (chiuso >= 0) {
         const raw = body.slice(0, chiuso);
@@ -244,27 +292,57 @@ export async function playerStats(nome: string): Promise<PlayerStats> {
         opp = senzaTag(inner).replace(/\s+/g, ' ').trim() || null;
       }
       const dopo = chiuso >= 0 ? body.slice(chiuso + 4) : body;
-      const v = numeri(senzaTag(dopo)).slice(0, 8); // MIN PTS REB AST BLK STL FP FPPM
-      if (v.length >= 8) {
+      const v = numeri(senzaTag(dopo)).slice(0, 6); // MIN PTS REB AST BLK STL (ignoro FP/FPPM standard)
+      if (v.length >= 6) {
         gamelog.push({
-          date,
-          opp,
-          min: toNum(v[0]),
-          pts: toNum(v[1]),
-          reb: toNum(v[2]),
-          ast: toNum(v[3]),
-          blk: toNum(v[4]),
-          stl: toNum(v[5]),
-          fp: toNum(v[6]),
-          fppm: toNum(v[7]),
+          date, opp,
+          min: toNum(v[0]), pts: toNum(v[1]), reb: toNum(v[2]),
+          ast: toNum(v[3]), blk: toNum(v[4]), stl: toNum(v[5]),
+          to: null, fp: null, fppm: null,
         });
       }
     }
   }
 
-  const found =
-    season_line.fppm !== null || monthly.length > 0 || gamelog.length > 0 || header.pos !== null;
-  return { ...vuoto, found, season, header, season_line, last5, last10, last20, monthly, gamelog };
+  // Tabellino secondario → calcolo FP custom per partita (allineo per indice).
+  const sec = tabellinoSecondario(html);
+  if (sec.length === gamelog.length) {
+    for (let i = 0; i < gamelog.length; i++) {
+      const g = gamelog[i];
+      const s = sec[i];
+      g.to = s.to;
+      g.fp = r2(fpCustom(g, s));
+      g.fppm = (g.min ?? 0) > 0 ? Math.round((g.fp / (g.min as number)) * 1000) / 1000 : null;
+    }
+  }
+
+  // Riepiloghi per finestra, ricalcolati dai FP custom (partite giocate).
+  const giocate = gamelog.filter((g) => (g.min ?? 0) > 0 && g.fp !== null);
+  const season_line = aggrega(gamelog);
+  const last5 = aggrega(giocate.slice(0, 5));
+  const last10 = aggrega(giocate.slice(0, 10));
+  const last20 = aggrega(giocate.slice(0, 20));
+
+  // Split mensili (per mese di calendario dalla data), in ordine cronologico.
+  const perMese = new Map<string, PlayerGame[]>();
+  for (const g of gamelog) {
+    const key = g.date.slice(0, 7); // "2025-10"
+    (perMese.get(key) ?? perMese.set(key, []).get(key)!).push(g);
+  }
+  const monthly = [...perMese.keys()]
+    .sort()
+    .map((key) => {
+      const line = aggrega(perMese.get(key)!);
+      const mese = MESI_ABBR[parseInt(key.slice(5, 7), 10) - 1] ?? key;
+      return { month: mese, gp: line.gp, fppg: line.fppg, fppm: line.fppm };
+    })
+    .filter((m) => m.gp > 0);
+
+  const found = gamelog.length > 0 || header.pos !== null;
+  return {
+    ...vuoto, found, season, header,
+    season_line, last5, last10, last20, monthly, gamelog,
+  };
 }
 
 export interface SyncResult {
