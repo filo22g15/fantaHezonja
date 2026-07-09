@@ -1,0 +1,15 @@
+# Node.js portabile (non committare, ~100MB)
+tools/
+
+# Python
+__pycache__/
+*.pyc
+*.bak
+
+# Env / segreti
+.env
+.env.local
+web/.env.local
+
+# Backup Excel temporanei
+~$*.xlsx
