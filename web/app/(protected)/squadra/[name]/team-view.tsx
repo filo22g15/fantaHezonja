@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useLeague, caps } from '@/lib/league/context';
 import { capTotals } from '@/lib/league/cap';
 import { CapBar, SalCell, Spotrac, fmtM, fmtMPlain } from '@/lib/league/format';
+import { PlayerName } from '../../player-modal';
 import type { League, Player } from '@/lib/league/types';
 
 interface Row {
@@ -130,7 +131,7 @@ export default function TeamView({ name }: { name: string }) {
                   <span className="role">{p.r || '—'}</span>
                 </td>
                 <td className="pname cardtitle" data-label="Giocatore">
-                  {p.n} <Spotrac n={p.n} url={p.spotrac} />
+                  <PlayerName n={p.n} /> <Spotrac n={p.n} url={p.spotrac} />
                 </td>
                 {p.sal.map((_, s) => (
                   <td key={s} className="num" data-label={S[s]}>
@@ -277,7 +278,7 @@ export default function TeamView({ name }: { name: string }) {
                       <span className="role">{p.r || '—'}</span>
                     </td>
                     <td className="pname cardtitle" data-label="Giocatore">
-                      {p.n} <Spotrac n={p.n} url={p.spotrac} /> <span className="dim">→ {p.t ? p.t : 'svincolato'}</span>
+                      <PlayerName n={p.n} /> <Spotrac n={p.n} url={p.spotrac} /> <span className="dim">→ {p.t ? p.t : 'svincolato'}</span>
                     </td>
                     {p.dead!.sal.map((v, s) => (
                       <td key={s} className="num" data-label={S[s]}>

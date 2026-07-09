@@ -10,6 +10,7 @@ import SignOut from './sign-out';
 import AdminToggle from './admin-toggle';
 import PublishBar from './publish-bar';
 import PickTeam from './pick-team';
+import { PlayerModalProvider } from './player-modal';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +70,9 @@ export default async function ProtectedLayout({
           </span>
         </div>
       </header>
-      <main>{children}</main>
+      <PlayerModalProvider>
+        <main>{children}</main>
+      </PlayerModalProvider>
       <PublishBar />
     </LeagueProvider>
   );

@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useLeague, caps } from '@/lib/league/context';
 import { fmtFull, SalCell, Spotrac, statusOf, stClass } from '@/lib/league/format';
+import { PlayerName } from './player-modal';
 import type { League, Player } from '@/lib/league/types';
 
 export default function ContrattiPage() {
@@ -296,7 +297,7 @@ export default function ContrattiPage() {
                       <span className="role">{p.r || '—'}</span>
                     </td>
                     <td className="pname cardtitle" data-label="Giocatore">
-                      {p.n} <Spotrac n={p.n} url={p.spotrac} />
+                      <PlayerName n={p.n} /> <Spotrac n={p.n} url={p.spotrac} />
                       {p.dead && p.dead.t && (
                         <Link
                           className="deadtag"

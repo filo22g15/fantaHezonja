@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useLeague, caps } from '@/lib/league/context';
 import { capTotals } from '@/lib/league/cap';
 import { fmtMPlain } from '@/lib/league/format';
+import { PlayerName } from '../player-modal';
 import { applyMoves, buildMoves, describeMove, type Move } from '@/lib/league/trade';
 import { applyProposal, proposeTrade, rejectProposal } from '@/app/actions/tradeProposals';
 import type { League } from '@/lib/league/types';
@@ -282,7 +283,7 @@ export default function TradeView({
                       gp.map(({ p, i }) => (
                         <div className="asset" key={i}>
                           <span className="aname">
-                            {p.n}
+                            <PlayerName n={p.n} />
                             <span className="as">{fmtMPlain(p.sal[0])}</span>
                           </span>
                           <DestSel assetId={'p' + i} owner={name} />

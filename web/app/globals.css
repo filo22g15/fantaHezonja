@@ -324,3 +324,62 @@ select.teamsel.moved{border-color:#E8C55B; color:#E8C55B}
   .tbl-cards td[colspan]::before{content:none}
   .tbl-cards td:empty{display:none}
 }
+
+/* ── Popup statistiche giocatore (sports.ws) ─────────────────────────────── */
+.pname-btn{
+  font:inherit; color:inherit; font-weight:600; background:none; border:0; padding:0;
+  cursor:pointer; text-align:left; border-bottom:1px dotted transparent;
+}
+.pname-btn:hover{color:var(--ball); border-bottom-color:var(--ball)}
+.aname .pname-btn{font-weight:600}
+
+.pm-dialog{
+  border:0; padding:0; border-radius:var(--radius); background:transparent;
+  max-width:760px; width:calc(100% - 24px); color:var(--ink);
+}
+.pm-dialog::backdrop{background:rgba(6,10,16,.72); backdrop-filter:blur(2px)}
+.pm-inner{
+  position:relative; background:var(--panel); border:1px solid var(--line);
+  border-radius:var(--radius); padding:20px; max-height:86vh; overflow:auto;
+}
+.pm-close{
+  position:absolute; top:8px; right:10px; background:none; border:0; color:var(--muted);
+  font-size:26px; line-height:1; cursor:pointer; padding:2px 6px;
+}
+.pm-close:hover{color:var(--ink)}
+.pm-center{padding:28px 8px; text-align:center; color:var(--muted)}
+.pm-err{color:var(--loss)}
+.pm-spinner{
+  display:inline-block; width:15px; height:15px; vertical-align:-2px; margin-right:6px;
+  border:2px solid var(--line); border-top-color:var(--ball); border-radius:50%;
+  animation:pm-spin .7s linear infinite;
+}
+@keyframes pm-spin{to{transform:rotate(360deg)}}
+
+.pm-head{display:flex; gap:14px; align-items:center; margin-bottom:16px; padding-right:24px}
+.pm-photo{width:64px; height:64px; border-radius:8px; object-fit:cover; background:var(--panel-2)}
+.pm-head h3{font-size:20px; margin-bottom:2px}
+.pm-sub{color:var(--muted); font-size:13px}
+.pm-sub.dim{opacity:.7; font-size:12px}
+
+.pm-cards{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:18px}
+.pm-card{background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px 6px; text-align:center}
+.pm-card-k{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.4px}
+.pm-card-fppm{font-size:22px; font-weight:700; color:var(--ball); margin:3px 0}
+.pm-card-fppg{color:var(--muted); font-size:11px}
+
+.pm-h4{margin:14px 0 6px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px}
+.pm-tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:8px}
+.pm-table{width:100%; border-collapse:collapse; font-size:13px; white-space:nowrap}
+.pm-table th{background:var(--panel-2); color:var(--muted); font-weight:600; text-align:right; padding:6px 8px}
+.pm-table td{padding:5px 8px; text-align:right; border-top:1px solid var(--line)}
+.pm-table th:first-child, .pm-table td:first-child, .pm-table td.pm-opp{text-align:left}
+.pm-table .pm-strong{color:var(--ball); font-weight:700}
+.pm-opp{color:var(--muted)}
+.pm-foot{margin-top:16px; text-align:center}
+.pm-foot .ext{opacity:1; font-size:13px}
+
+@media (max-width:560px){
+  .pm-cards{grid-template-columns:repeat(2,1fr)}
+  .pm-inner{padding:16px}
+}
