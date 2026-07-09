@@ -4,8 +4,15 @@ Sito della lega per consultare **contratti, salary cap, roster e scelte al draft
 squadra, con un **pannello Admin** per gestire spostamenti, tagli, stipendi, pick e scambi
 e pubblicarli online con un clic.
 
-Il sito è una singola pagina statica (`index.html`) ospitata su GitHub Pages: non serve
-alcun server. I dati vivono nel file e vengono aggiornati direttamente dall'Admin dal sito.
+Il sito è una **webapp** (Next.js + Supabase, ospitata su Vercel) con **account personali**
+per i membri della lega: i dati vivono in un database Supabase e vengono aggiornati direttamente
+dall'Admin dal sito, con pubblicazione in un clic. Il codice della webapp sta nella cartella
+[`web/`](web/); la pipeline Python di supporto (scraping contratti/ruoli, avanzamento stagione,
+Bacheca) resta a parte e sincronizza col DB.
+
+> Esiste anche la versione storica a **pagina statica** (`index.html`, un tempo su GitHub Pages):
+> gli stessi contenuti e le stesse regole, ma senza account né database. La documentazione delle
+> regole e delle azioni Admin qui sotto vale per entrambe.
 
 ---
 
@@ -67,6 +74,7 @@ Uscendo dalla modalità Admin (riclic su ● Admin) le modifiche non pubblicate 
 | **Aggiornare la Bacheca** | pagina **Bacheca** | In Admin la pagina diventa un editor: campi per campione/premi/conference/division/record/maglie. **+ Aggiungi riga** e **✕** per righe. Il medagliere si ricalcola da solo. Poi **Pubblica**. |
 | **Avanzare la stagione** | pagina **Recap** | Pulsante **⏭ Avanza stagione**. Vedi sotto. |
 | **Scambi (Trade)** | pagina **Trade** | Vedi sotto. |
+| **Gestire gli utenti** | pagina **Admin → Utenti** | Assegni nome (GM) e squadra a ogni membro e reimposti le password. Vedi *Gestione accessi*. |
 
 ### Avanzare di un anno (fine stagione)
 
@@ -153,6 +161,28 @@ La voce **Trade** nel menu compare solo agli Admin. Serve a fare scambi multipli
 3. La colonna **Riceve** di ogni squadra si compila da sola, e il **cap proiettato** si
    aggiorna in tempo reale così controlli che lo scambio stia sotto il cap.
 4. **Applica scambio** esegue tutti gli spostamenti in un colpo; poi premi **Pubblica**.
+
+### Gestione accessi (solo webapp)
+
+Sulla webapp ogni membro ha un **account** (email + password) gestito da Supabase Auth. **Non c'è
+auto-registrazione**: un utente nuovo non può iscriversi da solo. Le password sono **cifrate** e
+non rileggibili — puoi solo reimpostarle.
+
+**Dare accesso a un membro nuovo (primo accesso):**
+
+1. **Crea l'utente in Supabase** → dashboard del progetto → *Authentication → Users → Add user*:
+   inserisci **email** e una **password provvisoria**, e spunta **Auto Confirm User** (altrimenti
+   l'account resta in attesa di conferma via email).
+2. Nella webapp vai in **Admin → Utenti**: assegna al nuovo membro il **nome (GM)** e la sua
+   **squadra**.
+3. **Comunica al membro email + password provvisoria.** Lui entra dalla pagina di login.
+
+**Reimpostare una password:** in **Admin → Utenti**, colonna *Password* → **🔑 Reimposta**
+(minimo 6 caratteri). La nuova password va comunicata al membro (Supabase non mostra quella vecchia).
+
+> **Accesso senza password (magic link):** la pagina di login ha anche *"inviami un link via email"*.
+> Funziona solo se l'utente **esiste già** in Supabase e se è configurato l'invio email (SMTP) nel
+> progetto Supabase — non crea account nuovi.
 
 ---
 
@@ -267,7 +297,8 @@ Dopo, `git commit` + `git push` per pubblicare.
 
 | File | Cosa contiene |
 |---|---|
-| `index.html` | Tutto il sito: interfaccia, logica e dati incorporati. |
+| `web/` | La **webapp** Next.js + Supabase (interfaccia, azioni admin, auth). Vedi `web/`. |
+| `index.html` | Versione storica a pagina statica: interfaccia, logica e dati incorporati. |
 | `data.js` | Copia dei dati (aggiornata insieme a `index.html` a ogni pubblicazione). |
 | `sincronizza.py` | Script: aggiorna ruoli e contratti dal web. |
 | `aggiorna_dati.py` | Script: rigenera i dati dall'Excel (`FantaNBA.xlsx`). |
